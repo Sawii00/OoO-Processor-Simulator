@@ -1,14 +1,6 @@
 import json
 
 
-class IssuedInstruction:
-    def __init__(self, opcode, op1, op2):
-        self.opcode = opcode
-        self.op1 = op1
-        self.op2 = op2
-        self.exception = False
-        self.result = 0
-
 
 class Instruction:
     def __init__(self, pc, opcode, dest, first, second):
@@ -50,36 +42,43 @@ class IntegerQueueEntry:
 
 class ALU:
     def __init__(self):
-        self.shift_reg = []
+        self.shift_reg = [None, None]
 
-    def push_instruction(self, instr: Instruction):
-        assert len(self.shift_reg) < 2
-        self.shift_reg.append(instr)
+    def push_instruction(self, instr: IntegerQueueEntry):
+        assert self.shift_reg[0] is None
+        self.shift_reg[0] = instr
+
+    def tick(self):
+        assert self.shift_reg[1] is None
+        self.shift_reg[1] = self.shift_reg[0]
+        self.shift_reg[0] = None
 
     def pop_result(self):
-        if len(self.shift_reg) != 0:
-            executed_instr = self.shift_reg.pop()
+        if self.shift_reg[1] is not None:
+            executed_instr = self.shift_reg[1]
+            result = 0
+            exception = 0
             if executed_instr.opcode in ["add", "addi"]:
-                executed_instr.result = executed_instr.op1 + executed_instr.op2
+                result = executed_instr.a_val + executed_instr.b_val
             elif executed_instr.opcode == "sub":
-                executed_instr.result = executed_instr.op1 - executed_instr.op2
+                result = executed_instr.a_val - executed_instr.b_val
             elif executed_instr.opcode == "mulu":
-                executed_instr.result = executed_instr.op1 * executed_instr.op2
+                result = executed_instr.a_val * executed_instr.b_val
             elif executed_instr.opcode == "divu":
-                if executed_instr.op2 == 0:
-                    executed_instr.exception = True
+                if executed_instr.b_val == 0:
+                    exception = True
                 else:
                     # NOTE: assignment mentions operands being __unsigned__
-                    executed_instr.result = executed_instr.op1 / executed_instr.op2
+                    result = executed_instr.a_val / executed_instr.b_val
             elif executed_instr.opcode == "remu":
-                if executed_instr.op2 == 0:
-                    executed_instr.exception = True
+                if executed_instr.b_val == 0:
+                    exception = True
                 else:
                     # NOTE: assignment mentions operands being __unsigned__
-                    executed_instr.result = executed_instr.op1 % executed_instr.op2
+                    result = executed_instr.a_val % executed_instr.b_val
             else:
                 raise Exception("Invalid Instruction in Execution Stage")
-            return executed_instr
+            return result, exception, executed_instr
         else:
             return None
 
@@ -124,17 +123,37 @@ class CPU:
         pass
 
     def issue(self):
-        pass
+        issued = 0
+        for el in self.integer_queue:
+            if issued == 4:
+                break
+            if el.a_rdy and el.b_rdy:
+                self.ALUs[issued].push_instruction(el)
+                issued += 1
+                self.integer_queue.remove(el)
 
     def exec1(self):
-        pass
+        for alu in self.ALUs:
+            alu.tick()
 
     def exec2(self):
         for alu in self.ALUs:
-            res = alu.pop_result()
-            if res is not None:
-                # TODO: finish implementation
-                pass
+            outcome = alu.pop_result()
+            if outcome is not None:
+                result, exception, instruction = outcome
+                for el in self.active_list:
+                    if el.pc == instruction.pc:
+                        el.done = True
+                        el.exception = exception
+                        break
+                # update integer_queue
+                for el in self.integer_queue:
+                    if el.a_tag == instruction.pc:
+                        el.a_val = result
+                        el.a_rdy = True
+                    if el.b_tag == instruction.pc:
+                        el.b_val = result
+                        el.b_rdy = True
 
     def commit(self):
         if not self.exception_flag:
