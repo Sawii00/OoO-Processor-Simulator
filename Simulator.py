@@ -1,6 +1,15 @@
 import json
 
 
+class IssuedInstruction:
+    def __init__(self, opcode, op1, op2):
+        self.opcode = opcode
+        self.op1 = op1
+        self.op2 = op2
+        self.exception = False
+        self.result = 0
+
+
 class Instruction:
     def __init__(self, pc, opcode, dest, first, second):
         self.pc = pc
@@ -8,6 +17,7 @@ class Instruction:
         self.dest = dest
         self.first = first
         self.second = second
+        self.result = 0
 
     def __str__(self):
         return f"({self.pc}): {self.opcode} {self.dest}, {self.first}, {self.second};\n"
@@ -38,6 +48,42 @@ class IntegerQueueEntry:
         self.pc = pc
 
 
+class ALU:
+    def __init__(self):
+        self.shift_reg = []
+
+    def push_instruction(self, instr: Instruction):
+        assert len(self.shift_reg) < 2
+        self.shift_reg.append(instr)
+
+    def pop_result(self):
+        if len(self.shift_reg) != 0:
+            executed_instr = self.shift_reg.pop()
+            if executed_instr.opcode in ["add", "addi"]:
+                executed_instr.result = executed_instr.op1 + executed_instr.op2
+            elif executed_instr.opcode == "sub":
+                executed_instr.result = executed_instr.op1 - executed_instr.op2
+            elif executed_instr.opcode == "mulu":
+                executed_instr.result = executed_instr.op1 * executed_instr.op2
+            elif executed_instr.opcode == "divu":
+                if executed_instr.op2 == 0:
+                    executed_instr.exception = True
+                else:
+                    # NOTE: assignment mentions operands being __unsigned__
+                    executed_instr.result = executed_instr.op1 / executed_instr.op2
+            elif executed_instr.opcode == "remu":
+                if executed_instr.op2 == 0:
+                    executed_instr.exception = True
+                else:
+                    # NOTE: assignment mentions operands being __unsigned__
+                    executed_instr.result = executed_instr.op1 % executed_instr.op2
+            else:
+                raise Exception("Invalid Instruction in Execution Stage")
+            return executed_instr
+        else:
+            return None
+
+
 class CPU:
     def __init__(self, code):
         self.code = code
@@ -53,6 +99,7 @@ class CPU:
         self.integer_queue = []
 
         self.state_log = []
+        self.ALUs = [ALU(), ALU(), ALU(), ALU()]
 
     def reset(self):
         self.pc = 0
@@ -66,8 +113,11 @@ class CPU:
         self.active_list = []
         self.integer_queue = []
 
+        self.state_log = []
+        self.ALUs = [ALU(), ALU(), ALU(), ALU()]
+
     def fetch_decode(self):
-        #remember exception handling
+        # remember exception handling
         pass
 
     def rename_dispatch(self):
@@ -80,21 +130,39 @@ class CPU:
         pass
 
     def exec2(self):
-        pass
+        for alu in self.ALUs:
+            res = alu.pop_result()
+            if res is not None:
+                # TODO: finish implementation
+                pass
 
     def commit(self):
-        for i in range(4):
-            if not self.active_list[i].done:
-                break
-            if self.active_list[i].exception:
-                # Handle Exception
-                self.exception_flag = True
-                self.e_pc = self.active_list[i].pc
-                #TODO: reset execution stage
-                #TODO: reset integer queue
-            else:
-                el = self.active_list.pop(0)
-                self.free_list.append(el.old_dest)
+        if not self.exception_flag:
+            for i in range(4):
+                if not self.active_list[i].done:
+                    break
+                if self.active_list[i].exception:
+                    # Handle Exception
+                    self.exception_flag = True
+                    self.e_pc = self.active_list[i].pc
+                    # TODO: reset execution stage
+                    self.integer_queue = []
+                else:
+                    el = self.active_list.pop(0)
+                    self.free_list.append(el.old_dest)
+        else:
+            for i in range(min(4, len(self.active_list))):
+                # Roll-back Active List
+                last_instr = self.active_list.pop() # Grab last element
+                curr_physical = self.map_table[last_instr.logical_dest]
+                self.map_table[last_instr.logical_dest] = last_instr.old_dest
+                self.free_list.append(curr_physical)
+                self.busy_bit[curr_physical] = False # NOTE: do we need to do anything with last_instr.old_dest??
+
+            if len(self.active_list) == 0:
+                # Exception has been handled
+                self.exception_flag = False
+                self.e_pc = 0
 
     def log_state(self):
         out = dict()
