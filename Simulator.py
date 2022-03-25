@@ -52,10 +52,12 @@ class CPU:
         self.active_list = []
         self.integer_queue = []
 
+        self.state_log = []
+
     def reset(self):
         self.pc = 0
         self.rf = [0 for i in range(64)]
-        self.dir = []
+        self.dir = [0 for i in range(4)]
         self.exception_flag = False
         self.e_pc = 0
         self.map_table = [i for i in range(32)]
@@ -64,8 +66,8 @@ class CPU:
         self.active_list = []
         self.integer_queue = []
 
-
     def fetch_decode(self):
+        #remember exception handling
         pass
 
     def rename_dispatch(self):
@@ -81,14 +83,45 @@ class CPU:
         pass
 
     def commit(self):
-        pass
+        for i in range(4):
+            if not self.active_list[i].done:
+                break
+            if self.active_list[i].exception:
+                # Handle Exception
+                self.exception_flag = True
+                self.e_pc = self.active_list[i].pc
+                #TODO: reset execution stage
+                #TODO: reset integer queue
+            else:
+                el = self.active_list.pop(0)
+                self.free_list.append(el.old_dest)
+
+    def log_state(self):
+        out = dict()
+        out["PC"] = self.pc
+        out["PhysicalRegisterFile"] = self.rf
+        out["DecodedPCs"] = [el.pc for el in self.dir]
+        out["ExceptionPC"] = self.e_pc
+        out["Exception"] = self.exception_flag
+        out["RegisterMapTable"] = self.map_table
+        out["FreeList"] = self.free_list
+        out["BusyBitTable"] = self.busy_bit
+        out["ActiveList"] = [{"Done": el.done, "Exception": el.exception, "LogicalDestination": el.logical_dest,
+                              "OldDestination": el.old_dest, "PC": el.pc} for el in self.active_list]
+        out["IntegerQueue"] = [{"DestRegister": el.dest_reg, "OpAIsReady": el.a_rdy, "OpARegTag": el.a_tag,
+                                "OpAValue": el.a_val, "OpBIsReady": el.b_rdy, "OpBRegTag": el.b_tag,
+                                "OpBValue": el.b_val,
+                                "OpCode": el.opcode, "PC": el.pc} for el in self.integer_queue]
+        self.state_log.append(out)
 
     def dump(self, filename):
-        pass
+        with open(filename, "w") as file:
+            json.dump(self.state_log, file)
 
     def check_asserts(self):
         assert len(self.active_list) <= 32
         assert len(self.integer_queue) <= 32
+        assert len(self.dir) <= 4
 
     def start(self, filename=""):
         while self.pc < len(self.code):
@@ -99,8 +132,12 @@ class CPU:
             self.rename_dispatch()
             self.fetch_decode()
             self.check_asserts()
-            if filename != "":
-                self.dump(filename)
+            self.log_state()
+
+        if filename != "":
+            self.dump(filename)
+        else:
+            print(self.state_log)
 
 
 class Simulator:
@@ -122,5 +159,4 @@ class Simulator:
 
     def run(self):
         cpu = CPU(self.code)
-        cpu.start()
-
+        cpu.start("out_log.json")
