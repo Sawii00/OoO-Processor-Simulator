@@ -44,6 +44,9 @@ class ALU:
     def __init__(self):
         self.shift_reg = [None, None]
 
+    def reset(self):
+        self.shift_reg = [None, None]
+
     def push_instruction(self, instr: IntegerQueueEntry):
         assert self.shift_reg[0] is None
         self.shift_reg[0] = instr
@@ -116,21 +119,30 @@ class CPU:
         self.ALUs = [ALU(), ALU(), ALU(), ALU()]
 
     def fetch_decode(self):
-        # remember exception handling
-        pass
+        if self.exception_flag:
+            self.pc = 0x10000
+            self.dir = []
+            return
+        for i in range(min(4 - len(self.dir), len(self.code) - self.pc)):
+            self.dir.append(self.code[self.pc])
+            self.pc += 1
 
     def rename_dispatch(self):
         pass
 
     def issue(self):
         issued = 0
-        for el in self.integer_queue:
+        removed_ids = []
+        for i, el in enumerate(self.integer_queue):
             if issued == 4:
                 break
             if el.a_rdy and el.b_rdy:
                 self.ALUs[issued].push_instruction(el)
                 issued += 1
-                self.integer_queue.remove(el)
+                removed_ids.append(i)
+        removed_ids.sort(reverse=True)
+        for id in removed_ids:
+            self.integer_queue.pop(id)
 
     def exec1(self):
         for alu in self.ALUs:
@@ -154,6 +166,9 @@ class CPU:
                     if el.b_tag == instruction.pc:
                         el.b_val = result
                         el.b_rdy = True
+                # Physical Register Update
+                self.busy_bit[instruction.dest_reg] = False
+                self.rf[instruction.dest_reg] = result
 
     def commit(self):
         if not self.exception_flag:
@@ -164,7 +179,8 @@ class CPU:
                     # Handle Exception
                     self.exception_flag = True
                     self.e_pc = self.active_list[i].pc
-                    # TODO: reset execution stage
+                    for alu in self.ALUs:
+                        alu.reset()
                     self.integer_queue = []
                 else:
                     el = self.active_list.pop(0)
@@ -181,7 +197,7 @@ class CPU:
             if len(self.active_list) == 0:
                 # Exception has been handled
                 self.exception_flag = False
-                self.e_pc = 0
+                # self.e_pc = 0
 
     def log_state(self):
         out = dict()
@@ -211,7 +227,7 @@ class CPU:
         assert len(self.dir) <= 4
 
     def start(self, filename=""):
-        while self.pc < len(self.code):
+        while self.pc < len(self.code) and not self.stop_sim:
             self.commit()
             self.exec2()
             self.exec1()
