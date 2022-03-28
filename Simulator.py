@@ -122,8 +122,7 @@ class CPU:
             self.dir.append(self.code[self.pc])
             self.pc += 1
 
-    # Treating instruction as atomic. It can dispatch UP to 4 instructions, but also less
-    # Fetch will see the backpressure by using the number of empty slots in DIR as measure
+    # TODO: backpressure must stop all renaming and dispatch --> do not push anything
     # Forwarding path handled by execute phase
     def rename_dispatch(self):
         for i in range(min(len(self.dir), 32 - len(self.active_list), 32 - len(self.integer_queue), 64 - len(self.free_list))):
@@ -197,6 +196,7 @@ class CPU:
                     for alu in self.ALUs:
                         alu.reset()
                     self.integer_queue = []
+                    break
                 else:
                     el = self.active_list[i]
                     removed_ids.append(i)
