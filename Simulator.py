@@ -71,7 +71,7 @@ class ALU:
                     exception = True
                 else:
                     # NOTE: assignment mentions operands being __unsigned__
-                    result = executed_instr.a_val / executed_instr.b_val
+                    result = executed_instr.a_val // executed_instr.b_val
             elif executed_instr.opcode == "remu":
                 if executed_instr.b_val == 0:
                     exception = True
@@ -277,6 +277,7 @@ class Simulator:
             code = json.load(file)
             for pc, instr in enumerate(code):
                 opcode = instr.split(" ")[0].strip()
+                if opcode == "addi": opcode = "add"
                 rest = instr[instr.find(" "):]
                 first_op = (rest.split(",")[1].strip())
                 second_op = (rest.split(",")[2].strip())
