@@ -111,7 +111,7 @@ class CPU:
 
         self.run = True
         self.committed_instructions = 0
-
+        self.next_is_exception = False
 
     def fetch_decode(self):
         if self.exception_flag:
@@ -122,10 +122,11 @@ class CPU:
             self.dir.append(self.code[self.pc])
             self.pc += 1
 
-    # TODO: backpressure must stop all renaming and dispatch --> do not push anything
     # Forwarding path handled by execute phase
     def rename_dispatch(self):
-        for i in range(min(len(self.dir), 32 - len(self.active_list), 32 - len(self.integer_queue), 64 - len(self.free_list))):
+        if len(self.dir) > 32 - len(self.active_list)  or len(self.dir) > 32 - len(self.integer_queue) or len(self.dir) > 64 - len(self.free_list):
+            return
+        for i in range(len(self.dir)):
             instruction = self.dir.pop(0)
             physical_reg = self.free_list.pop(0)
             old_physical_dest = self.map_table[self.extract_number(instruction.dest)]
@@ -191,11 +192,7 @@ class CPU:
                     break
                 if self.active_list[i].exception:
                     # Handle Exception
-                    self.exception_flag = True
-                    self.e_pc = self.active_list[i].pc
-                    for alu in self.ALUs:
-                        alu.reset()
-                    self.integer_queue = []
+                    self.next_is_exception = True
                     break
                 else:
                     el = self.active_list[i]
@@ -208,6 +205,12 @@ class CPU:
             if self.committed_instructions == len(self.code):
                 return True
         else:
+            if self.next_is_exception:
+                self.exception_flag = True
+                self.e_pc = self.active_list[0].pc
+                for alu in self.ALUs:
+                    alu.reset()
+                self.integer_queue = []
             for i in range(min(4, len(self.active_list))):
                 # Roll-back Active List
                 last_instr = self.active_list.pop() # Grab last element
