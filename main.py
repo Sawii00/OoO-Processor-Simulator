@@ -1,4 +1,4 @@
 from Simulator import *
 
-sim = Simulator("test2.json")
+sim = Simulator("test3.json")
 sim.run()

@@ -124,9 +124,12 @@ class CPU:
 
     # Forwarding path handled by execute phase
     def rename_dispatch(self):
-        if len(self.dir) > 32 - len(self.active_list)  or len(self.dir) > 32 - len(self.integer_queue) or len(self.dir) > 64 - len(self.free_list):
+        if self.exception_flag:
             return
-        for i in range(len(self.dir)):
+        if (len(self.dir) > 32 - len(self.active_list)) or (len(self.dir) > 32 - len(self.integer_queue)) or (len(self.dir) > len(self.free_list)):
+            return
+        curr_dir_length = len(self.dir)
+        for i in range(curr_dir_length):
             instruction = self.dir.pop(0)
             physical_reg = self.free_list.pop(0)
             old_physical_dest = self.map_table[self.extract_number(instruction.dest)]
@@ -138,7 +141,7 @@ class CPU:
             is_immediate = instruction.second[0].isdigit()
             b_rdy = not self.busy_bit[self.map_table[second_op]] if not is_immediate else True
             b_tag = self.map_table[second_op] if not is_immediate else 0
-            b_val = self.rf[b_tag] if not is_immediate else self.extract_number(instruction.second) # Even if invalid it carries no meaning since a_rdy will be false
+            b_val = self.rf[b_tag] if not is_immediate else second_op # Even if invalid it carries no meaning since a_rdy will be false
             self.map_table[self.extract_number(instruction.dest)] = physical_reg
             self.busy_bit[physical_reg] = True
             self.integer_queue.append(IntegerQueueEntry(physical_reg, a_rdy, a_tag, a_val, b_rdy, b_tag, b_val, instruction.opcode, instruction.pc))
@@ -185,7 +188,7 @@ class CPU:
                 self.rf[instruction.dest_reg] = result
 
     def commit(self):
-        if not self.exception_flag:
+        if not self.next_is_exception and not self.exception_flag:
             removed_ids = []
             for i in range(min(4, len(self.active_list))):
                 if not self.active_list[i].done:
@@ -207,11 +210,13 @@ class CPU:
         else:
             if self.next_is_exception:
                 self.exception_flag = True
+                self.next_is_exception = False
                 self.e_pc = self.active_list[0].pc
                 for alu in self.ALUs:
                     alu.reset()
                 self.integer_queue = []
-            for i in range(min(4, len(self.active_list))):
+            curr_active_list_length = len(self.active_list)
+            for i in range(min(4, curr_active_list_length)):
                 # Roll-back Active List
                 last_instr = self.active_list.pop() # Grab last element
                 curr_physical = self.map_table[last_instr.logical_dest]
@@ -221,8 +226,7 @@ class CPU:
 
             if len(self.active_list) == 0:
                 # Exception has been handled
-                self.exception_flag = False
-                # self.e_pc = 0
+                # self.exception_flag = False
                 return True
         return False
 
