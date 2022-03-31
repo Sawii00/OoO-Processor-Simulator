@@ -192,14 +192,14 @@ class CPU:
             old_physical_dest = self.map_table[self.extract_number(instruction.dest)]
             first_op = self.extract_number(instruction.first)
             a_rdy = not self.busy_bit[self.map_table[first_op]]
-            a_tag = self.map_table[first_op]
-            a_val = self.rf[a_tag]  # Even if invalid it carries no meaning since a_rdy will be false
+            a_tag = self.map_table[first_op] if not a_rdy else 0
+            a_val = self.rf[a_tag]
             second_op = self.extract_number(instruction.second)
             is_immediate = instruction.second[0].isdigit()  # We check if the second operand is a register or immediate
             b_rdy = not self.busy_bit[self.map_table[second_op]] if not is_immediate else True
-            b_tag = self.map_table[second_op] if not is_immediate else 0
+            b_tag = self.map_table[second_op] if (not is_immediate) or (not b_rdy) else 0
             b_val = self.rf[
-                b_tag] if not is_immediate else second_op  # Even if invalid it carries no meaning since a_rdy will be false
+                b_tag] if not is_immediate else second_op
             self.map_table[self.extract_number(instruction.dest)] = physical_reg  # Mapping logical to physical register
             self.busy_bit[physical_reg] = True  # Setting the physical destination as busy
             self.integer_queue.append(
@@ -247,7 +247,7 @@ class CPU:
             If an instruction was executed, we update the entry in the ActiveList as DONE and set the exception bit.
             Subsequently, we update all entries of the IntegerQueue that rely on this physical register as operand to
             simulate the action of a forwarding path.
-            Finally, we also set the physical register as not busy and ###############################################################################
+            Finally, we also set the physical register as not busy and write to the register file.
         """
 
         for alu in self.ALUs:
