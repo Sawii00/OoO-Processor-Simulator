@@ -123,8 +123,8 @@ class CPU:
         else:
             return int(str)
 
-    def __init__(self, code):
-        self.code = code
+    def __init__(self):
+        self.code = []
         self.pc = 0
         self.rf = [0 for i in range(64)]
         self.dir = []
@@ -370,7 +370,7 @@ class CPU:
         assert len(self.integer_queue) <= 32
         assert len(self.dir) <= 4
 
-    def start(self, filename=""):
+    def start(self, code, filename=""):
         """ Main simulation Loop.
 
             The simulation keeps running until either an exception is raised or all the code has been executed.
@@ -379,6 +379,7 @@ class CPU:
             At each cycle the CPU state is logged and when the simulation is finished it is dumped to file.
         """
 
+        self.code = code
         self.log_state()
         while self.run:
             stop = self.commit()
@@ -395,7 +396,7 @@ class CPU:
         if filename != "":
             self.dump(filename)
         else:
-            print(self.state_log)
+            return self.state_log
 
 
 class Simulator:
@@ -407,7 +408,7 @@ class Simulator:
                 if opcode == "addi": opcode = "add"
                 registers = instruction[instruction.find(" "):].split(",")
                 destination_register = (registers[0].strip())
-                operand_1= (registers[1].strip())
+                operand_1 = (registers[1].strip())
                 operand_2 = (registers[2].strip())
                 output.append(Instruction(PC, opcode, destination_register, operand_1, operand_2))
         return output
@@ -417,5 +418,5 @@ class Simulator:
         self.filename = filename
 
     def run(self):
-        cpu = CPU(self.code)
-        cpu.start(f"out_{self.filename}")
+        cpu = CPU()
+        cpu.start(self.code, f"tests/out_{self.filename.split('/')[1]}")
