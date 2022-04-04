@@ -139,10 +139,28 @@ class CPU:
         self.state_log = []  # List of dictionaries that stores CPU state for each cycle.
         self.ALUs = [ALU(), ALU(), ALU(), ALU()]
 
-        self.run = True
+        self.stop = False 
         self.committed_instructions = 0
-        self.next_is_exception = False  # Signals that the next cycle an exception must be handled.
 
+    def reset(self):
+        self.code = []
+        self.pc = 0
+        self.rf = [0 for i in range(64)]
+        self.dir = []
+        self.exception_flag = False
+        self.e_pc = 0
+        self.map_table = [i for i in range(32)]
+        self.free_list = [i for i in range(32, 64)]
+        self.busy_bit = [False for i in range(64)]
+        self.active_list = []
+        self.integer_queue = []
+
+        self.state_log = []  # List of dictionaries that stores CPU state for each cycle.
+        self.ALUs = [ALU(), ALU(), ALU(), ALU()]
+
+        self.stop = False 
+        self.committed_instructions = 0
+        
     def fetch_decode(self):
         """Executes the Fetch and Decode stage.
 
@@ -193,13 +211,14 @@ class CPU:
             first_op = self.extract_number(instruction.first)
             a_rdy = not self.busy_bit[self.map_table[first_op]]
             a_tag = self.map_table[first_op] if not a_rdy else 0
-            a_val = self.rf[a_tag]
+            a_val = self.rf[self.map_table[first_op]] if a_rdy else 0
             second_op = self.extract_number(instruction.second)
             is_immediate = instruction.second[0].isdigit()  # We check if the second operand is a register or immediate
             b_rdy = not self.busy_bit[self.map_table[second_op]] if not is_immediate else True
-            b_tag = self.map_table[second_op] if (not is_immediate) or (not b_rdy) else 0
-            b_val = self.rf[
-                b_tag] if not is_immediate else second_op
+            b_tag = self.map_table[second_op] if (not is_immediate) and (not b_rdy) else 0
+            b_val = self.rf[self.map_table[second_op]] if b_rdy else 0
+            if is_immediate:
+                b_val = second_op 
             self.map_table[self.extract_number(instruction.dest)] = physical_reg  # Mapping logical to physical register
             self.busy_bit[physical_reg] = True  # Setting the physical destination as busy
             self.integer_queue.append(
@@ -279,17 +298,10 @@ class CPU:
                 instruction that generated an exception or that is not DONE.
                 For each instruction that can be committed, it appends to the FreeList the old destination register that
                 was mapped before issuing such instruction, and the entry is removed from the ActiveList.
-                If an exception is spotted by checking at the "exception" bit of the ActiveListEntry, the
-                "next_is_exception" flag is set to indicate that the next cycle requires the exception flag be set True.
-                It is not correct to directly set the exception flag here, because a backward pass is implemented and
-                previous stages would immediately react to the exception being spotted, while it is requested to enter
-                Exception Mode in the next cycle.
+                If an exception is spotted by checking at the "exception" bit of the ActiveListEntry, the ExceptionFlag is
+                raised and all stages will be reset in the same cycle. 
 
             Exception Mode:
-                If next_is_exception is True, we must enter exception mode this cycle and thus we raise the exception
-                flag, set the ePC to the value of the instruction generating the exception (in the head), resetting the
-                ALUs, and emptying the IntegerQueue.
-
                 Each cycle, the commit stage tries to roll-back up to 4 instructions at a time from the tail of the
                 ActiveList, restoring the MapTable, appending to FreeList the physical registers, and clearing the
                 BusyBit until all (AMONG WHICH THE INSTRUCTION RAISING THE EXCEPTION) have been rolled-back.
@@ -299,14 +311,18 @@ class CPU:
 
         """
 
-        if not self.next_is_exception and not self.exception_flag:
+        if not self.exception_flag:
             removed_ids = []
             for i in range(min(4, len(self.active_list))):
                 if not self.active_list[i].done:
                     break
                 if self.active_list[i].exception:
                     # Handle Exception
-                    self.next_is_exception = True
+                    self.exception_flag = True
+                    self.e_pc = self.active_list[i].pc
+                    for alu in self.ALUs:
+                        alu.reset()
+                    self.integer_queue = []
                     break
                 else:
                     el = self.active_list[i]
@@ -316,16 +332,9 @@ class CPU:
             removed_ids.sort(reverse=True)
             for id in removed_ids:
                 self.active_list.pop(id)
-            if self.committed_instructions == len(self.code):
+            if self.committed_instructions == len(self.code) or (len(self.active_list) == 0 and self.pc >= len(self.code) and len(self.dir) == 0):
                 return True
         else:
-            if self.next_is_exception:
-                self.exception_flag = True
-                self.next_is_exception = False
-                self.e_pc = self.active_list[0].pc
-                for alu in self.ALUs:
-                    alu.reset()
-                self.integer_queue = []
             curr_active_list_length = len(self.active_list)
             for i in range(min(4, curr_active_list_length)):
                 # Roll-back Active List
@@ -333,7 +342,7 @@ class CPU:
                 curr_physical = self.map_table[last_instr.logical_dest]
                 self.map_table[last_instr.logical_dest] = last_instr.old_dest
                 self.free_list.append(curr_physical)
-                self.busy_bit[curr_physical] = False  # NOTE: do we need to do anything with last_instr.old_dest??
+                self.busy_bit[curr_physical] = False  
 
             if len(self.active_list) == 0:
                 # Exception has been handled
@@ -379,12 +388,11 @@ class CPU:
             At each cycle the CPU state is logged and when the simulation is finished it is dumped to file.
         """
 
+        self.reset()
         self.code = code
         self.log_state()
-        while self.run:
-            stop = self.commit()
-            if stop:
-                break
+        while not self.stop:
+            self.stop = self.commit()
             self.exec2()
             self.exec1()
             self.issue()
@@ -392,7 +400,8 @@ class CPU:
             self.fetch_decode()
             self.check_asserts()
             self.log_state()
-        self.log_state()
+        if not len(self.code):
+            self.state_log.pop()
         if filename != "":
             self.dump(filename)
         else:
