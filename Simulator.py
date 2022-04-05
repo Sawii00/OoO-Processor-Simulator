@@ -346,7 +346,7 @@ class CPU:
 
             if len(self.active_list) == 0:
                 # Exception has been handled
-                # self.exception_flag = False
+                self.exception_flag = False
                 return True
         return False
 
@@ -400,7 +400,7 @@ class CPU:
             self.fetch_decode()
             self.check_asserts()
             self.log_state()
-        if not len(self.code):
+        if not len(self.code): # To handle output for empty program
             self.state_log.pop()
         if filename != "":
             self.dump(filename)
