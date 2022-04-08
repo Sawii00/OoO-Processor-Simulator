@@ -370,7 +370,7 @@ class CPU:
 
     def dump(self, filename):
         with open(filename, "w") as file:
-            json.dump(self.state_log, file)
+            json.dump(self.state_log, file, indent=2)
 
     def check_asserts(self):
         """Checking that fixed length of internal data structures are not exceeded."""
@@ -404,6 +404,7 @@ class CPU:
             self.state_log.pop()
         if filename != "":
             self.dump(filename)
+            print(f"Result File output to {filename}")
         else:
             return self.state_log
 
@@ -428,4 +429,4 @@ class Simulator:
 
     def run(self):
         cpu = CPU()
-        cpu.start(self.code, f"tests/out_{self.filename.split('/')[1]}")
+        cpu.start(self.code, f"out_{self.filename.split('/')[1]}")
