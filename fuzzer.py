@@ -52,8 +52,9 @@ class Fuzzer:
 
 fuzzer = Fuzzer()
 sim1 = sawo.CPU()
+sim2 = custom.CPU()
 
-errors = fuzzer.test(sim1, sim2, 2000, 2000)
+errors = fuzzer.test(sim1, sim2, 5, 5)
 for i, error in enumerate(errors):
     with open(f"errors/code_error_{i}_1.json", "w") as file:
         json.dump(error[0], file, indent=2)

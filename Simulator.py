@@ -210,15 +210,13 @@ class CPU:
             old_physical_dest = self.map_table[self.extract_number(instruction.dest)]
             first_op = self.extract_number(instruction.first)
             a_rdy = not self.busy_bit[self.map_table[first_op]]
-            a_tag = self.map_table[first_op] if not a_rdy else 0
-            a_val = self.rf[self.map_table[first_op]] if a_rdy else 0
+            a_tag = self.map_table[first_op] 
+            a_val = self.rf[self.map_table[first_op]] # Even if not ready, we don't care about it 
             second_op = self.extract_number(instruction.second)
             is_immediate = instruction.second[0].isdigit()  # We check if the second operand is a register or immediate
             b_rdy = not self.busy_bit[self.map_table[second_op]] if not is_immediate else True
-            b_tag = self.map_table[second_op] if (not is_immediate) and (not b_rdy) else 0
-            b_val = self.rf[self.map_table[second_op]] if b_rdy else 0
-            if is_immediate:
-                b_val = second_op 
+            b_tag = self.map_table[second_op]
+            b_val = self.rf[self.map_table[second_op]] if not is_immediate else second_op # Even if not ready, we don't care about it
             self.map_table[self.extract_number(instruction.dest)] = physical_reg  # Mapping logical to physical register
             self.busy_bit[physical_reg] = True  # Setting the physical destination as busy
             self.integer_queue.append(
