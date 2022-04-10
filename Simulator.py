@@ -433,4 +433,4 @@ class Simulator:
 
     def run(self):
         cpu = CPU()
-        cpu.start(self.code, f"out_299307_{self.filename}")
+        cpu.start(self.code, f"out_299307_{self.filename.split('/')[-1]}")
