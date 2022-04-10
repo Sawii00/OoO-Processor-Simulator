@@ -117,7 +117,12 @@ class CPU:
         race conditions should arise.
     """
 
+
     def extract_number(self, str):
+        """
+            Helper function that extracts the number of the second operand of the instruction, which can be either a
+            register or an immediate value.
+        """
         if not str[0].isdigit():
             return int(str[1:])
         else:
@@ -330,6 +335,7 @@ class CPU:
             removed_ids.sort(reverse=True)
             for id in removed_ids:
                 self.active_list.pop(id)
+            # We stop the simulation if we have committed all instructions
             if self.committed_instructions == len(self.code) or (len(self.active_list) == 0 and self.pc >= len(self.code) and len(self.dir) == 0):
                 return True
         else:
@@ -343,7 +349,7 @@ class CPU:
                 self.busy_bit[curr_physical] = False  
 
             if len(self.active_list) == 0:
-                # Exception has been handled
+                # Exception has been handled and we can stop the simulation
                 self.exception_flag = False
                 return True
         return False
@@ -427,4 +433,4 @@ class Simulator:
 
     def run(self):
         cpu = CPU()
-        cpu.start(self.code, f"out_{self.filename.split('/')[1]}")
+        cpu.start(self.code, f"out_{self.filename}")
