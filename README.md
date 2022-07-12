@@ -8,6 +8,7 @@ To run a test it is sufficient to invoke the program as:
 ./main.py [name of test case file]
 ```
 
+A Fuzzer was written to compare the output with another implementation and make sure the results match at each cycle. 
 
 The program will output in the same directory of main.py a file called out_299307_[name of test case file].json
 
