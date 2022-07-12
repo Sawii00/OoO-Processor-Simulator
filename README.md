@@ -6,8 +6,9 @@ The goal was to implement a cycle-by-cycle accurate simulation of a MIPS R10000-
 To run a test it is sufficient to invoke the program as:
 ```
 ./main.py [name of test case file]
-}
 ```
 
 
 The program will output in the same directory of main.py a file called out_299307_[name of test case file].json
+
+Report: https://drive.google.com/file/d/1KyqphLyF5sUgaBUKodo8FXF5ul2LFJm1/view?usp=sharing
